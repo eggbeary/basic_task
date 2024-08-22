@@ -5,6 +5,7 @@
 展示了 JDK build 时 configure 的 JVM features 结果,以及如何打开和关闭 Shenandoah GC：
 
 \task1\configure_result.jpg
+
 \task1\使用&不使用Shenandoah GC.jpg
 
 ## Task 2: 不同 GC 参数的测试用例
