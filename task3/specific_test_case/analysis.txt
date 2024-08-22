@@ -1,0 +1,73 @@
+根据提供的日志，我们可以分析出以下情况：
+
+1. G1GC: To-space exhausted -> Full GC
+
+根据提供的G1GC日志，我们可以看到一些有趣的情况，但并没有出现"To-space exhausted"的明确情况。让我们分析一下关键点：
+
+(1). GC触发原因：
+```
+[0.101s][info ][gc,start      ] GC(0) Pause Young (Concurrent Start) (G1 Humongous Allocation)
+```
+这次GC是由于大对象分配（Humongous Allocation）触发的，而不是由于To-space耗尽。
+
+(2). 堆使用情况：
+```
+[0.101s][debug][gc,heap       ] GC(0)  garbage-first heap   total 524288K, used 236464K [0x00000000e0000000, 0x0000000100000000)
+```
+在GC开始时，堆内存使用率约为45%，这表明系统确实面临一定的内存压力。
+
+(3). 大对象分配：
+日志中显示了多个大对象（Humongous objects）的分配，每个大小为2097168字节（约2MB）。这些大对象的分配可能是导致GC触发的主要原因。
+
+(4). 并发周期启动：
+```
+[0.100s][debug][gc,ergo,ihop  ] Request concurrent cycle initiation (occupancy higher than threshold) occupancy: 241172480B allocation request: 2097168B threshold: 241591910B (45.00) source: concurrent humongous allocation
+```
+这表明系统请求启动并发标记周期，因为堆占用率超过了阈值（45%）。
+
+(5). Young GC：
+这次GC是一次Young GC，同时启动了并发标记周期（Concurrent Start）。
+
+
+2. ZGC: Allocation Stall
+
+
+ZGC日志中确实出现了多次Allocation Stall,例如:
+
+```
+[64.279s][info ][gc             ] Allocation Stall (Thread-9) 13.244ms
+[64.279s][info ][gc             ] Allocation Stall (Thread-1) 13.352ms
+[64.279s][info ][gc             ] Allocation Stall (Thread-5) 13.410ms
+```
+
+这表明ZGC确实遇到了分配停顿的情况。
+
+3. Shenandoah GC: Pacing -> Degenerated GC -> Full GC
+
+在Shenandoah GC的日志中，我们可以看到完整的期望序列：
+
+- Pacing:
+```
+[38.386s][info ][gc,ergo        ] Pacer for Idle. Initial: 5242K, Alloc Tax Rate: 1.0x
+```
+
+- Degenerated GC:
+```
+[38.388s][info ][gc,start       ] GC(4152) Pause Degenerated GC (Outside of Cycle)
+```
+
+- Full GC:
+```
+[38.391s][info ][gc             ] GC(4152) Cannot finish degeneration, upgrading to Full GC
+```
+
+结论：
+
+1. 虽然我们没有看到明确的"To-space exhausted"情况，但是我们确实观察到了G1GC在处理大量大对象分配时的行为。系统面临着一定的内存压力，主要是由于大对象的分配。
+
+G1GC正在通过启动并发标记周期来应对这种情况，这是它处理内存压力的正常方式。如果情况继续恶化，可能最终会导致"To-space exhausted"，但在这个日志片段中我们还没有看到这种情况。
+
+要观察到"To-space exhausted"的情况，我们可能需要更长时间的日志，或者更高的内存压力。在当前的情况下，G1GC似乎仍然能够有效地管理内存，尽管面临着大对象分配的挑战。
+2. ZGC出现了Allocation Stall
+3. Shenandoah GC完全符合预期，展现了Pacing -> Degenerated GC -> Full GC的完整序列
+
